@@ -1,4 +1,4 @@
-Import streamlit as st
+import streamlit as st
 
 st.title("مدرسة الشهيد أحمد سامي الثانوية العسكرية بنين 🏫")
 st.write("أهلاً بكم في الموقع الرسمي للمشروع الخاص بنا!")
