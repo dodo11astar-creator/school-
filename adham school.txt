@@ -1,0 +1,281 @@
+import streamlit as st
+import sqlite3
+import pandas as pd
+from datetime import datetime
+import os
+from google import genai
+
+# ----------------------------------------------------
+# 0. إعداد وتكوين الذكاء الاصطناعي (Google GenAI الرسمي)
+# ----------------------------------------------------
+API_KEY = "AQ.Ab8RN6J0rvTDEScyAzXEKibGVmwNoxWgm8aBU_Q53i5iJGac2g"
+
+ai_client = None
+if API_KEY and API_KEY != "YOUR_API_KEY":
+    try:
+        ai_client = genai.Client(api_key=API_KEY)
+    except Exception as e:
+        ai_client = None
+
+# ----------------------------------------------------
+# 1. إعداد قاعدة البيانات المحلية (SQLite Database Setup)
+# ----------------------------------------------------
+def init_db():
+    conn = sqlite3.connect('school_system.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS grades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT,
+            subject TEXT,
+            grade INTEGER,
+            date TEXT
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS discipline (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT,
+            class_name TEXT,
+            violation_type TEXT,
+            reason TEXT,
+            date TEXT
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS news (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            category TEXT,
+            date TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ضبط إعدادات الصفحة
+st.set_page_config(
+    page_title="منظومة مدرسة الشهيد أحمد سامي الثانوية العسكرية بنين", 
+    page_icon="🏫", 
+    layout="wide"
+)
+
+# ----------------------------------------------------
+# رأس الصفحة الرسمي (الشعار، اسم المدرسة، ومدير المدرسة)
+# ----------------------------------------------------
+logo_path = "logo.jpg" 
+
+col_logo, col_title = st.columns([1, 4])
+
+with col_logo:
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=130)
+    else:
+        st.warning("⚠️ ضع صورة الشعار باسم logo.jpg في نفس المجلد")
+
+with col_title:
+    st.markdown("##### 📍 مديرية التربية والتعليم ببورسعيد — إدارة شمال التعليمية")
+    st.title("🏫 مدرسة الشهيد أحمد سامي الثانوية العسكرية بنين")
+    st.markdown("**مدير المدرسة:** الأستاذ / أحمد عبد الحميد | **المنظومة الرقمية الذكية للمتابعة والتعليم**")
+
+st.markdown("---")
+
+# ----------------------------------------------------
+# القائمة الجانبية: بوابة الدخول الرئيسية (تحديد الصلاحيات)
+# ----------------------------------------------------
+st.sidebar.title("🔐 بوابة الدخول الرئيسية")
+user_role = st.sidebar.radio("اختر صفتك للدخول:", [
+    "🎓 بوابة الطلاب (قراءة واستعلام فقط)", 
+    "👩‍🏫 بوابة المدرسين والمسؤولين (صلاحيات التعديل والإضافة الكاملة)"
+])
+
+# ====================================================
+# أولاً: بوابة الطلاب (مستعرضة ومقيدة - بدون صلاحيات تعديل)
+# ====================================================
+if user_role == "🎓 بوابة الطلاب (قراءة واستعلام فقط)":
+    st.sidebar.markdown("---")
+    student_page = st.sidebar.radio("اختر القسم الدراسي:", [
+        "📰 جريدة المدرسة والأخبار", 
+        "📚 المكتبة الرقمية والكتب", 
+        "📅 الجدول الدراسي الموحد", 
+        "🤖 المساعد الذكي الحقيقي (AI Tutor)",
+        "📊 متابعة التقييمات الشخصية"
+    ])
+    
+    if student_page == "📰 جريدة المدرسة والأخبار":
+        st.subheader("📰 جريدة مدرسة الشهيد أحمد سامي الرقمية (للاطلاع فقط)")
+        st.write("أحدث الإعلانات المدرسية والفعاليات العسكرية والتعليمية تحت إدارة الأستاذ أحمد عبد الحميد.")
+        
+        conn = sqlite3.connect('school_system.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT title, content, category, date FROM news ORDER BY id DESC")
+        db_news = cursor.fetchall()
+        conn.close()
+        
+        st.info("🎉 **تكريم أوائل الشهر:** مبروك لجميع الطلاب المتفوقين في التقييمات الأخيرة للمدرسة!")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("🏆 **دوري التربية الرياضية العسكرية:** ستبدأ المباريات القادمة في الملعب الكبير.")
+        with col2:
+            st.warning("🔬 **مسابقة الذكاء الاصطناعي والابتكار:** باب التسجيل مفتوح لتقديم المشاريع.")
+
+        if db_news:
+            st.markdown("---")
+            st.subheader("📢 آخر الأخبار المضافة:")
+            for title, content, category, date in db_news:
+                st.markdown(f"**[{category}] {title}** *(بتاريخ: {date})*")
+                st.write(content)
+                st.markdown("---")
+
+    elif student_page == "📚 المكتبة الرقمية والكتب":
+        st.subheader("📚 المكتبة الرقمية والتحميلات المباشرة")
+        subject_choice = st.selectbox("اختر المادة الدراسية:", ["الرياضيات", "الفيزياء", "الكيمياء", "اللغة العربية", "اللغة الإنجليزية", "التربية العسكرية"])
+        
+        st.info(f"📖 **الكتب والمذكرات المتاحة لمادة {subject_choice}:**")
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            st.download_button("📥 تحميل الكتاب المدرسي (PDF)", data="محتوى الكتاب التجريبي", file_name=f"book_{subject_choice}.txt")
+        with col_b2:
+            st.download_button("📥 تحميل نماذج التقييمات والملخصات", data="محتوى التقييم التجريبي", file_name=f"evaluation_{subject_choice}.txt")
+
+    elif student_page == "📅 الجدول الدراسي الموحد":
+        st.subheader("📅 جدول الحصص والأنشطة العسكرية الأسبوعي")
+        schedule_data = {
+            "الحصة الأولى": ["رياضيات", "فيزياء", "لغة عربية", "إنجليزي", "حاسب آلي"],
+            "الحصة الثانية": ["تربية عسكرية", "رياضيات", "كيمياء", "أحياء", "تربية رياضية"],
+            "الحصة الثالثة": ["فيزياء", "كيمياء", "إنجليزي", "رياضيات", "لغة عربية"],
+            "الحصة الرابعة": ["إنجليزي", "لغة عربية", "رياضيات", "تربية عسكرية", "نشاط"]
+        }
+        df_schedule = pd.DataFrame(schedule_data, index=["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"])
+        st.table(df_schedule)
+
+    elif student_page == "🤖 المساعد الذكي الحقيقي (AI Tutor)":
+        st.subheader("🤖 المساعد التعليمي الذكي (مدعوم بنظام Gemini AI الرسمي)")
+        st.write("اسأل المساعد عن أي درس أو مسألة علمية وسيقوم بتحليلها وإعطائك إجابة دقيقة فوراً.")
+        
+        user_query = st.text_input("اكتب سؤالك التعليمي هنا:")
+        if st.button("إرسال السؤال للذكاء الاصطناعي"):
+            if user_query:
+                with st.spinner("جاري التحليل بواسطة الذكاء الاصطناعي..."):
+                    try:
+                        if ai_client:
+                            response = ai_client.models.generate_content(
+                                model='gemini-2.5-flash',
+                                contents=user_query,
+                            )
+                            st.success("💡 **إجابة المساعد الذكي:**")
+                            st.write(response.text)
+                        else:
+                            st.error("⚠️ يتعذر الاتصال بالسيرفر حالياً.")
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء الاتصال بالذكاء الاصطناعي: {e}")
+            else:
+                st.warning("يرجى كتابة سؤال أولاً.")
+
+    elif student_page == "📊 متابعة التقييمات الشخصية":
+        st.subheader("📊 الاستعلام عن درجات التقييمات الشهرية")
+        search_student = st.text_input("ادخل اسمك بالكامل للاستعلام عن الدرجات:")
+        if st.button("بحث"):
+            if search_student:
+                conn = sqlite3.connect('school_system.db')
+                user_df = pd.read_sql_query("SELECT subject AS 'المادة', grade AS 'الدرجة', date AS 'التاريخ' FROM grades WHERE student_name LIKE ?", conn, params=(f"%{search_student}%",))
+                conn.close()
+                if not user_df.empty:
+                    st.dataframe(user_df)
+                else:
+                    st.warning("لم يتم العثور على درجات مسجلة بهذا الاسم.")
+
+# ====================================================
+# ثانياً: بوابة المدرسين والمسؤولين (محمية بالرمز 0000 - صلاحيات كاملة للتعديل)
+# ====================================================
+elif user_role == "👩‍🏫 بوابة المدرسين والمسؤولين (صلاحيات التعديل والإضافة الكاملة)":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔒 حماية البوابة الإدارية")
+    
+    SECRET_PASSWORD = "0000"  # الكود السري المكون من 4 أصفار
+    input_password = st.sidebar.text_input("ادخل الكود السري للدخول:", type="password")
+    
+    if input_password == SECRET_PASSWORD:
+        st.sidebar.success("🔑 تم التحقق بنجاح! لديك كامل الصلاحيات للتعديل والإضافة.")
+        
+        teacher_page = st.sidebar.radio("اختر لوحة العمل الإدارية:", [
+            "📊 رفع وتعديل درجات التقييمات", 
+            "⚠️ إدارة سجل الانضباط والمخالفات والجزاءات",
+            "📰 نشر وتعديل أخبار الجريدة المدرسية"
+        ])
+        
+        conn = sqlite3.connect('school_system.db')
+        cursor = conn.cursor()
+        
+        if teacher_page == "📊 رفع وتعديل درجات التقييمات":
+            st.subheader("📊 لوحة المعلمين: تسجيـل ورفع وتعديل درجات التقييمات الشهرية")
+            with st.form("grades_form"):
+                s_name = st.text_input("اسم الطالب بالكامل:")
+                s_subject = st.selectbox("المادة الدراسية:", ["رياضيات", "فيزياء", "كيمياء", "اللغة العربية", "اللغة الإنجليزية", "التربية العسكرية"])
+                s_grade = st.number_input("الدرجة (من 100):", 0, 100)
+                submit_grade = st.form_submit_button("حفظ وإضافة الدرجة في قاعدة البيانات")
+                
+                if submit_grade and s_name:
+                    cursor.execute("INSERT INTO grades (student_name, subject, grade, date) VALUES (?, ?, ?, ?)",
+                                   (s_name, s_subject, s_grade, datetime.now().strftime("%Y-%m-%d")))
+                    conn.commit()
+                    st.success(f"تم حفظ درجة الطالب ({s_name}) بنجاح.")
+            
+            st.markdown("---")
+            st.subheader("📋 سجل الدرجات الحالي (صلاحية الإشراف والتعديل):")
+            grades_df = pd.read_sql_query("SELECT id AS 'المعرف', student_name AS 'الطالب', subject AS 'المادة', grade AS 'الدرجة', date AS 'التاريخ' FROM grades", conn)
+            st.dataframe(grades_df)
+
+        elif teacher_page == "⚠️ إدارة سجل الانضباط والمخالفات والجزاءات":
+            st.subheader("🚨 سجل الإدارة المدرسية: متابعة السلوك، التحذيرات، والقرارات الإدارية")
+            with st.form("behavior_form"):
+                student_name = st.text_input("اسم الطالب المخالف:")
+                class_name = st.text_input("الفصل الدراسي (مثال: 3 ثانوي عسكري):")
+                violation_type = st.selectbox("نوع الإجراء السلوكي / الإداري:", [
+                    "⚠️ تحذير أول (شفهي)", 
+                    "⚠️ تحذير كتابي نهائي", 
+                    "🚫 قرار فصل مؤقت (3 أيام)",
+                    "🚫 قرار فصل مؤقت (أسبوع)",
+                    "📝 غياب متكرر بدون عذر"
+                ])
+                reason = st.text_area("تفاصيل المخالفة والأسباب:")
+                
+                submit_btn = st.form_submit_button("حفظ الإجراء في سجل الانضباط")
+                if submit_btn and student_name:
+                    cursor.execute("INSERT INTO discipline (student_name, class_name, violation_type, reason, date) VALUES (?, ?, ?, ?, ?)",
+                                   (student_name, class_name, violation_type, reason, datetime.now().strftime("%Y-%m-%d")))
+                    conn.commit()
+                    st.error(f"تم تسجيل الإجراء السلوكي ضد الطالب ({student_name}) بنجاح.")
+
+            st.markdown("---")
+            st.subheader("📋 قائمة الحالات وسجل الانضباط الإداري:")
+            disc_df = pd.read_sql_query("SELECT id AS 'المعرف', student_name AS 'الطالب', class_name AS 'الفصل', violation_type AS 'الإجراء', reason AS 'السبب والتفاصيل', date AS 'التاريخ' FROM discipline", conn)
+            st.dataframe(disc_df)
+
+        elif teacher_page == "📰 نشر وتعديل أخبار الجريدة المدرسية":
+            st.subheader("📰 لوحة التحكم ونشر الأخبار الرسمية في جريدة المدرسة")
+            with st.form("news_form"):
+                news_title = st.text_input("عنوان الخبر أو الإعلان:")
+                news_category = st.selectbox("التصنيف:", ["إعلان هام", "نشاط رياضي/عسكري", "نشاط علمي", "تنبيه إداري"])
+                news_content = st.text_area("محتوى الخبر بالتفصيل:")
+                submit_news = st.form_submit_button("نشر الخبر فوراً في التطبيق")
+                
+                if submit_news and news_title:
+                    cursor.execute("INSERT INTO news (title, content, category, date) VALUES (?, ?, ?, ?)",
+                                   (news_title, news_content, news_category, datetime.now().strftime("%Y-%m-%d")))
+                    conn.commit()
+                    st.success("تم نشر الخبر بنجاح وظهر لجميع الطلاب في الجريدة الرقمية!")
+                    
+        conn.close()
+
+    elif input_password == "":
+        st.info("👈 يرجى إدخال الرمز السري `0000` في الشريط الجانبي لفتح صلاحيات المعلمين والإدارة.")
+    else:
+        st.error("❌ الرمز السري غير صحيح! يرجى التأكد من الرقم.")
